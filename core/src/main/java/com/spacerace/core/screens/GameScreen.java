@@ -10,28 +10,22 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
-import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.spacerace.core.SpaceRaceGame;
+import com.spacerace.core.entities.Car;
 
 /**
  * GameScreen — the main gameplay screen with vertical split-screen.
  *
  * Layout:
- * ┌────────────┬────────────┐
- * │  Player 1  │  Player 2  │
- * │  (W/A/S/D) │ (Arrows)   │
- * └────────────┴────────────┘
+ * ┌────────────────┬────────────────┐
+ * │    Player 1    │    Player 2    │
+ * │   (W/A/S/D)   │  (Arrow Keys)  │
+ * └────────────────┴────────────────┘
  *
  * Each player has their own {@link OrthographicCamera} and {@link Viewport}.
  * The screen is split vertically: left half for P1, right half for P2.
- *
- * Key concepts demonstrated:
- *  - Independent cameras that follow each player
- *  - glViewport/glScissor for split-screen clipping
- *  - Shared ShapeRenderer for dummy rendering
- *  - Independent input mapping per player
  */
 public class GameScreen implements Screen {
 
@@ -49,17 +43,11 @@ public class GameScreen implements Screen {
     private ShapeRenderer shapeRenderer;
     private BitmapFont labelFont;
 
-    // ── Player rectangles (dummy car representations) ─────────────────
-    // These use world coordinates.
-    private static final float CAR_WIDTH  = 30f;
-    private static final float CAR_HEIGHT = 50f;
-    private static final float CAR_SPEED  = 200f; // pixels per second
-
-    private Rectangle player1;
-    private Rectangle player2;
+    // ── Players ───────────────────────────────────────────────────────
+    private Car player1;
+    private Car player2;
 
     // ── World / track boundaries ──────────────────────────────────────
-    // The "track" is a large area the players can drive around in.
     private static final float TRACK_WIDTH  = 2000f;
     private static final float TRACK_HEIGHT = 2000f;
 
@@ -80,9 +68,6 @@ public class GameScreen implements Screen {
         cameraP1 = new OrthographicCamera();
         cameraP2 = new OrthographicCamera();
 
-        // Each viewport covers the full virtual world size.
-        // The actual screen region (left/right half) is set in render()
-        // via glViewport.
         viewportP1 = new FitViewport(SpaceRaceGame.WORLD_WIDTH, SpaceRaceGame.WORLD_HEIGHT, cameraP1);
         viewportP2 = new FitViewport(SpaceRaceGame.WORLD_WIDTH, SpaceRaceGame.WORLD_HEIGHT, cameraP2);
 
@@ -94,20 +79,9 @@ public class GameScreen implements Screen {
         labelFont.setColor(Color.WHITE);
         labelFont.getData().setScale(1.2f);
 
-        // ── Spawn players at different positions ──────────────────────
-        // Player 1 starts near the left side of the track
-        player1 = new Rectangle(
-                TRACK_WIDTH * 0.25f - CAR_WIDTH / 2f,
-                TRACK_HEIGHT * 0.5f  - CAR_HEIGHT / 2f,
-                CAR_WIDTH, CAR_HEIGHT
-        );
-
-        // Player 2 starts near the right side of the track
-        player2 = new Rectangle(
-                TRACK_WIDTH * 0.75f - CAR_WIDTH / 2f,
-                TRACK_HEIGHT * 0.5f  - CAR_HEIGHT / 2f,
-                CAR_WIDTH, CAR_HEIGHT
-        );
+        // ── Spawn players ─────────────────────────────────────────────
+        player1 = new Car(TRACK_WIDTH * 0.25f, TRACK_HEIGHT * 0.5f, Color.CYAN);
+        player2 = new Car(TRACK_WIDTH * 0.75f, TRACK_HEIGHT * 0.5f, Color.ORANGE);
 
         // ── Generate random star positions ────────────────────────────
         starX    = new float[STAR_COUNT];
@@ -123,7 +97,15 @@ public class GameScreen implements Screen {
     @Override
     public void render(float delta) {
         // ── Handle input ──────────────────────────────────────────────
-        handleInput(delta);
+        handleInput();
+
+        // ── Update car physics ────────────────────────────────────────
+        player1.update(delta);
+        player2.update(delta);
+
+        // ── Clamp to track boundaries ─────────────────────────────────
+        player1.clampToTrack(TRACK_WIDTH, TRACK_HEIGHT);
+        player2.clampToTrack(TRACK_WIDTH, TRACK_HEIGHT);
 
         // ── Update cameras to follow their respective players ─────────
         updateCamera(cameraP1, player1);
@@ -143,8 +125,8 @@ public class GameScreen implements Screen {
         Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
         Gdx.gl.glScissor(0, 0, halfWidth, screenHeight);
 
-        renderWorld(cameraP1, player1, player2);
-        renderHUD(cameraP1, "P1", Color.CYAN, 0, 0, halfWidth, screenHeight);
+        renderWorld(cameraP1);
+        renderHUD("P1", Color.CYAN, halfWidth, screenHeight);
 
         Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
 
@@ -153,15 +135,15 @@ public class GameScreen implements Screen {
         Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
         Gdx.gl.glScissor(halfWidth, 0, halfWidth, screenHeight);
 
-        renderWorld(cameraP2, player2, player1);
-        renderHUD(cameraP2, "P2", Color.ORANGE, halfWidth, 0, halfWidth, screenHeight);
+        renderWorld(cameraP2);
+        renderHUD("P2", Color.ORANGE, halfWidth, screenHeight);
 
         Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
 
-        // ── Reset viewport to full screen (important for UI overlays) ─
+        // ── Reset viewport to full screen ─────────────────────────────
         Gdx.gl.glViewport(0, 0, screenWidth, screenHeight);
 
-        // ── Draw the divider line between the two halves ──────────────
+        // ── Draw the divider line ─────────────────────────────────────
         drawDivider(screenWidth, screenHeight, halfWidth);
 
         // ── ESC to return to main menu ────────────────────────────────
@@ -176,39 +158,23 @@ public class GameScreen implements Screen {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Processes input for both players independently.
+     * Maps keyboard input to Car control flags.
      *
-     * Player 1: W (up), S (down), A (left), D (right)
+     * Player 1: W (accelerate), S (brake/reverse), A (turn left), D (turn right)
      * Player 2: Arrow keys
-     *
-     * @param delta time since last frame in seconds
      */
-    private void handleInput(float delta) {
-        float distance = CAR_SPEED * delta;
-
+    private void handleInput() {
         // ── Player 1 — WASD ───────────────────────────────────────────
-        if (Gdx.input.isKeyPressed(Input.Keys.W)) player1.y += distance;
-        if (Gdx.input.isKeyPressed(Input.Keys.S)) player1.y -= distance;
-        if (Gdx.input.isKeyPressed(Input.Keys.A)) player1.x -= distance;
-        if (Gdx.input.isKeyPressed(Input.Keys.D)) player1.x += distance;
+        player1.setAccelerating(Gdx.input.isKeyPressed(Input.Keys.W));
+        player1.setBraking(Gdx.input.isKeyPressed(Input.Keys.S));
+        player1.setTurningLeft(Gdx.input.isKeyPressed(Input.Keys.A));
+        player1.setTurningRight(Gdx.input.isKeyPressed(Input.Keys.D));
 
         // ── Player 2 — Arrow Keys ─────────────────────────────────────
-        if (Gdx.input.isKeyPressed(Input.Keys.UP))    player2.y += distance;
-        if (Gdx.input.isKeyPressed(Input.Keys.DOWN))  player2.y -= distance;
-        if (Gdx.input.isKeyPressed(Input.Keys.LEFT))  player2.x -= distance;
-        if (Gdx.input.isKeyPressed(Input.Keys.RIGHT)) player2.x += distance;
-
-        // ── Clamp to track boundaries ─────────────────────────────────
-        clampToTrack(player1);
-        clampToTrack(player2);
-    }
-
-    /**
-     * Prevents a player rectangle from leaving the track area.
-     */
-    private void clampToTrack(Rectangle player) {
-        player.x = MathUtils.clamp(player.x, 0, TRACK_WIDTH  - player.width);
-        player.y = MathUtils.clamp(player.y, 0, TRACK_HEIGHT - player.height);
+        player2.setAccelerating(Gdx.input.isKeyPressed(Input.Keys.UP));
+        player2.setBraking(Gdx.input.isKeyPressed(Input.Keys.DOWN));
+        player2.setTurningLeft(Gdx.input.isKeyPressed(Input.Keys.LEFT));
+        player2.setTurningRight(Gdx.input.isKeyPressed(Input.Keys.RIGHT));
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -216,15 +182,10 @@ public class GameScreen implements Screen {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Centers the camera on the given player rectangle.
-     * The camera follows the center of the player's car.
+     * Centers the camera on the given car.
      */
-    private void updateCamera(OrthographicCamera camera, Rectangle target) {
-        camera.position.set(
-                target.x + target.width  / 2f,
-                target.y + target.height / 2f,
-                0
-        );
+    private void updateCamera(OrthographicCamera camera, Car car) {
+        camera.position.set(car.getX(), car.getY(), 0);
         camera.update();
     }
 
@@ -233,15 +194,9 @@ public class GameScreen implements Screen {
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Renders the game world from a specific camera's perspective.
-     * Draws the background, stars, track boundary, and both players.
-     *
-     * @param camera      the camera for this viewport
-     * @param localPlayer the player "owning" this viewport (drawn in their color)
-     * @param otherPlayer the opponent (drawn in their color)
+     * Renders the game world: background, stars, grid, and both cars.
      */
-    private void renderWorld(OrthographicCamera camera,
-                             Rectangle localPlayer, Rectangle otherPlayer) {
+    private void renderWorld(OrthographicCamera camera) {
 
         shapeRenderer.setProjectionMatrix(camera.combined);
 
@@ -253,12 +208,11 @@ public class GameScreen implements Screen {
         }
         shapeRenderer.end();
 
-        // ── Draw track boundary (outlined rectangle) ──────────────────
+        // ── Draw track boundary and grid ──────────────────────────────
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
         shapeRenderer.setColor(Color.DARK_GRAY);
         shapeRenderer.rect(0, 0, TRACK_WIDTH, TRACK_HEIGHT);
 
-        // Draw a grid for spatial reference (every 200 units)
         shapeRenderer.setColor(0.1f, 0.1f, 0.2f, 1f);
         for (float gx = 0; gx <= TRACK_WIDTH; gx += 200f) {
             shapeRenderer.line(gx, 0, gx, TRACK_HEIGHT);
@@ -268,47 +222,16 @@ public class GameScreen implements Screen {
         }
         shapeRenderer.end();
 
-        // ── Draw the players ──────────────────────────────────────────
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-
-        // Determine colors based on which player is "local"
-        boolean localIsP1 = (localPlayer == player1);
-
-        // Draw Player 1 (cyan)
-        shapeRenderer.setColor(Color.CYAN);
-        shapeRenderer.rect(player1.x, player1.y, player1.width, player1.height);
-
-        // Draw Player 2 (orange)
-        shapeRenderer.setColor(Color.ORANGE);
-        shapeRenderer.rect(player2.x, player2.y, player2.width, player2.height);
-
-        // Draw a small "nose" indicator on each car to show facing direction
-        // (for now, all cars face upward)
-        shapeRenderer.setColor(Color.WHITE);
-        // P1 nose
-        shapeRenderer.triangle(
-                player1.x, player1.y + player1.height,
-                player1.x + player1.width, player1.y + player1.height,
-                player1.x + player1.width / 2f, player1.y + player1.height + 10f
-        );
-        // P2 nose
-        shapeRenderer.triangle(
-                player2.x, player2.y + player2.height,
-                player2.x + player2.width, player2.y + player2.height,
-                player2.x + player2.width / 2f, player2.y + player2.height + 10f
-        );
-
-        shapeRenderer.end();
+        // ── Draw cars (each car handles its own rotation) ─────────────
+        shapeRenderer.setProjectionMatrix(camera.combined);
+        player1.render(shapeRenderer);
+        player2.render(shapeRenderer);
     }
 
     /**
-     * Draws a simple HUD overlay for the given viewport.
-     * Shows the player label in the top-left corner.
+     * Draws a simple HUD overlay showing player label.
      */
-    private void renderHUD(OrthographicCamera worldCamera, String label,
-                           Color color, int vpX, int vpY, int vpW, int vpH) {
-        // We need a separate camera for the HUD so it doesn't move with the world.
-        // For simplicity, we draw using the SpriteBatch with an identity-like projection.
+    private void renderHUD(String label, Color color, int vpW, int vpH) {
         OrthographicCamera hudCamera = new OrthographicCamera(vpW, vpH);
         hudCamera.position.set(vpW / 2f, vpH / 2f, 0);
         hudCamera.update();
@@ -321,10 +244,9 @@ public class GameScreen implements Screen {
     }
 
     /**
-     * Draws a vertical divider line between the two player viewports.
+     * Draws a vertical divider line between the two viewports.
      */
     private void drawDivider(int screenWidth, int screenHeight, int halfWidth) {
-        // Use an orthographic camera matching screen pixel coords
         OrthographicCamera uiCamera = new OrthographicCamera(screenWidth, screenHeight);
         uiCamera.position.set(screenWidth / 2f, screenHeight / 2f, 0);
         uiCamera.update();
@@ -341,11 +263,7 @@ public class GameScreen implements Screen {
     // ═══════════════════════════════════════════════════════════════════
 
     @Override
-    public void resize(int width, int height) {
-        // We don't use viewport.update() here because we manually
-        // set glViewport in render(). But we store the dimensions
-        // implicitly through Gdx.graphics.getWidth/Height().
-    }
+    public void resize(int width, int height) { }
 
     @Override
     public void pause() { }
