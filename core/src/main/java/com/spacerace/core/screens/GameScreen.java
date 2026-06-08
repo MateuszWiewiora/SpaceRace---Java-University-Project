@@ -14,10 +14,6 @@ import com.spacerace.core.SpaceRaceGame;
 import com.spacerace.core.entities.Car;
 import com.spacerace.core.track.TrackMap;
 
-/**
- * Split-screen gameplay: left half = P1 (WASD), right half = P2 (Arrows).
- * Renders a Tiled map and two independently-controlled cars.
- */
 public class GameScreen implements Screen {
 
     private final SpaceRaceGame game;
@@ -40,7 +36,6 @@ public class GameScreen implements Screen {
         this.mapPath = mapPath;
     }
 
-    /** Convenience constructor using the default placeholder map. */
     public GameScreen(SpaceRaceGame game) {
         this(game, "maps/track_placeholder.tmx");
     }
@@ -69,6 +64,10 @@ public class GameScreen implements Screen {
 
         player1.update(delta);
         player2.update(delta);
+
+        checkTrackBounds(player1);
+        checkTrackBounds(player2);
+
         player1.clampToTrack(trackMap.getWidthPx(), trackMap.getHeightPx());
         player2.clampToTrack(trackMap.getWidthPx(), trackMap.getHeightPx());
 
@@ -82,13 +81,9 @@ public class GameScreen implements Screen {
         Gdx.gl.glClearColor(0.02f, 0.02f, 0.08f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        // P1 viewport (left half)
-        renderViewport(cameraP1, 0, halfWidth, screenHeight, "P1", Color.CYAN);
+        renderViewport(cameraP1, 0, halfWidth, screenHeight, "P1", Color.CYAN, player1);
+        renderViewport(cameraP2, halfWidth, halfWidth, screenHeight, "P2", Color.ORANGE, player2);
 
-        // P2 viewport (right half)
-        renderViewport(cameraP2, halfWidth, halfWidth, screenHeight, "P2", Color.ORANGE);
-
-        // Full-screen elements
         Gdx.gl.glViewport(0, 0, screenWidth, screenHeight);
         drawDivider(screenWidth, screenHeight, halfWidth);
 
@@ -98,8 +93,15 @@ public class GameScreen implements Screen {
         }
     }
 
+    private void checkTrackBounds(Car car) {
+        if (!car.isDriving()) return;
+        if (!trackMap.isOnTrack(car.getX(), car.getY())) {
+            car.startFalling();
+        }
+    }
+
     private void renderViewport(OrthographicCamera camera, int x, int width, int height,
-                                String label, Color color) {
+                                String label, Color color, Car owner) {
         Gdx.gl.glViewport(x, 0, width, height);
         Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
         Gdx.gl.glScissor(x, 0, width, height);
@@ -110,21 +112,35 @@ public class GameScreen implements Screen {
         player1.render(shapeRenderer);
         player2.render(shapeRenderer);
 
-        renderHUD(label, color, width, height);
+        renderHUD(label, color, width, height, owner);
 
         Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
     }
 
     private void handleInput() {
-        player1.setAccelerating(Gdx.input.isKeyPressed(Input.Keys.W));
-        player1.setBraking(Gdx.input.isKeyPressed(Input.Keys.S));
-        player1.setTurningLeft(Gdx.input.isKeyPressed(Input.Keys.A));
-        player1.setTurningRight(Gdx.input.isKeyPressed(Input.Keys.D));
+        if (player1.isDriving()) {
+            player1.setAccelerating(Gdx.input.isKeyPressed(Input.Keys.W));
+            player1.setBraking(Gdx.input.isKeyPressed(Input.Keys.S));
+            player1.setTurningLeft(Gdx.input.isKeyPressed(Input.Keys.A));
+            player1.setTurningRight(Gdx.input.isKeyPressed(Input.Keys.D));
+        } else {
+            player1.setAccelerating(false);
+            player1.setBraking(false);
+            player1.setTurningLeft(false);
+            player1.setTurningRight(false);
+        }
 
-        player2.setAccelerating(Gdx.input.isKeyPressed(Input.Keys.UP));
-        player2.setBraking(Gdx.input.isKeyPressed(Input.Keys.DOWN));
-        player2.setTurningLeft(Gdx.input.isKeyPressed(Input.Keys.LEFT));
-        player2.setTurningRight(Gdx.input.isKeyPressed(Input.Keys.RIGHT));
+        if (player2.isDriving()) {
+            player2.setAccelerating(Gdx.input.isKeyPressed(Input.Keys.UP));
+            player2.setBraking(Gdx.input.isKeyPressed(Input.Keys.DOWN));
+            player2.setTurningLeft(Gdx.input.isKeyPressed(Input.Keys.LEFT));
+            player2.setTurningRight(Gdx.input.isKeyPressed(Input.Keys.RIGHT));
+        } else {
+            player2.setAccelerating(false);
+            player2.setBraking(false);
+            player2.setTurningLeft(false);
+            player2.setTurningRight(false);
+        }
     }
 
     private void updateCamera(OrthographicCamera camera, Car car) {
@@ -132,7 +148,7 @@ public class GameScreen implements Screen {
         camera.update();
     }
 
-    private void renderHUD(String label, Color color, int vpW, int vpH) {
+    private void renderHUD(String label, Color color, int vpW, int vpH, Car car) {
         OrthographicCamera hudCamera = new OrthographicCamera(vpW, vpH);
         hudCamera.position.set(vpW / 2f, vpH / 2f, 0);
         hudCamera.update();
@@ -140,7 +156,14 @@ public class GameScreen implements Screen {
         batch.setProjectionMatrix(hudCamera.combined);
         batch.begin();
         labelFont.setColor(color);
-        labelFont.draw(batch, label + "  [ESC = Menu]", 10f, vpH - 10f);
+
+        String statusText = label;
+        if (!car.isDriving()) {
+            statusText += "  " + car.getState().name();
+        }
+        statusText += "  [ESC = Menu]";
+        labelFont.draw(batch, statusText, 10f, vpH - 10f);
+
         batch.end();
     }
 

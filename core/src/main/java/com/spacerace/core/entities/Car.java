@@ -6,7 +6,7 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 
 /**
- * Top-down arcade car with position, rotation, and speed-dependent turning.
+ * Top-down arcade car with state machine: DRIVING → FALLING → RESPAWNING → DRIVING.
  * Position represents the center of the car.
  * Rotation is in degrees CCW from positive X axis (90° = facing up).
  */
@@ -35,8 +35,19 @@ public class Car {
     private boolean turningLeft;
     private boolean turningRight;
 
+    private PlayerState state = PlayerState.DRIVING;
+    private float stateTimer;
+
+    private static final float FALL_DURATION = 1.2f;
+    private static final float RESPAWN_DURATION = 1.5f;
+    private float fallingScale = 1f;
+    private float fallingSpinSpeed;
+
+    private final Vector2 spawnPoint;
+
     public Car(float x, float y, Color color) {
         this.position = new Vector2(x, y);
+        this.spawnPoint = new Vector2(x, y);
         this.rotation = 90f;
         this.speed = 0f;
         this.velocity = new Vector2();
@@ -49,15 +60,24 @@ public class Car {
     public void setTurningRight(boolean value) { this.turningRight = value; }
 
     public void update(float delta) {
-        if (accelerating) {
-            speed += ACCELERATION * delta;
+        switch (state) {
+            case DRIVING:
+                updateDriving(delta);
+                break;
+            case FALLING:
+                updateFalling(delta);
+                break;
+            case RESPAWNING:
+                updateRespawning(delta);
+                break;
         }
+    }
+
+    private void updateDriving(float delta) {
+        if (accelerating) speed += ACCELERATION * delta;
         if (braking) {
-            if (speed > 0) {
-                speed -= BRAKE_FORCE * delta;
-            } else {
-                speed -= ACCELERATION * 0.5f * delta;
-            }
+            if (speed > 0) speed -= BRAKE_FORCE * delta;
+            else speed -= ACCELERATION * 0.5f * delta;
         }
 
         speed *= FRICTION;
@@ -67,12 +87,8 @@ public class Car {
         float speedFraction = Math.abs(speed) / MAX_SPEED;
         float effectiveTurnRate = TURN_SPEED * Math.max(speedFraction, speed != 0 ? MIN_TURN_SPEED_FACTOR : 0);
 
-        if (turningLeft) {
-            rotation += effectiveTurnRate * delta * (speed >= 0 ? 1 : -1);
-        }
-        if (turningRight) {
-            rotation -= effectiveTurnRate * delta * (speed >= 0 ? 1 : -1);
-        }
+        if (turningLeft) rotation += effectiveTurnRate * delta * (speed >= 0 ? 1 : -1);
+        if (turningRight) rotation -= effectiveTurnRate * delta * (speed >= 0 ? 1 : -1);
         rotation = ((rotation % 360f) + 360f) % 360f;
 
         float radians = MathUtils.degreesToRadians * rotation;
@@ -80,20 +96,87 @@ public class Car {
         position.add(velocity.x * delta, velocity.y * delta);
     }
 
+    private void updateFalling(float delta) {
+        stateTimer += delta;
+        float progress = Math.min(stateTimer / FALL_DURATION, 1f);
+
+        fallingScale = 1f - progress;
+        rotation += fallingSpinSpeed * delta;
+
+        if (progress >= 1f) {
+            state = PlayerState.RESPAWNING;
+            stateTimer = 0f;
+        }
+    }
+
+    private void updateRespawning(float delta) {
+        stateTimer += delta;
+
+        if (stateTimer >= RESPAWN_DURATION) {
+            position.set(spawnPoint);
+            rotation = 90f;
+            speed = 0f;
+            fallingScale = 1f;
+            state = PlayerState.DRIVING;
+            stateTimer = 0f;
+        }
+    }
+
+    public void startFalling() {
+        if (state != PlayerState.DRIVING) return;
+        state = PlayerState.FALLING;
+        stateTimer = 0f;
+        fallingScale = 1f;
+        fallingSpinSpeed = 360f + MathUtils.random(180f);
+        speed = 0f;
+    }
+
     public void render(ShapeRenderer renderer) {
+        if (state == PlayerState.RESPAWNING) {
+            renderRespawnGhost(renderer);
+            return;
+        }
+
+        float scale = (state == PlayerState.FALLING) ? fallingScale : 1f;
+        float w = WIDTH * scale;
+        float h = HEIGHT * scale;
+
         renderer.begin(ShapeRenderer.ShapeType.Filled);
-        renderer.setColor(color);
+
+        if (state == PlayerState.FALLING) {
+            renderer.setColor(color.r, color.g, color.b, Math.max(fallingScale, 0.2f));
+        } else {
+            renderer.setColor(color);
+        }
+
         renderer.identity();
         renderer.translate(position.x, position.y, 0);
         renderer.rotate(0, 0, 1, rotation - 90f);
-        renderer.rect(-WIDTH / 2f, -HEIGHT / 2f, WIDTH, HEIGHT);
+        renderer.rect(-w / 2f, -h / 2f, w, h);
 
-        renderer.setColor(Color.WHITE);
-        renderer.triangle(
-                -WIDTH / 2f, HEIGHT / 2f,
-                 WIDTH / 2f, HEIGHT / 2f,
-                 0f, HEIGHT / 2f + 10f
-        );
+        if (scale > 0.3f) {
+            renderer.setColor(Color.WHITE);
+            renderer.triangle(
+                    -w / 2f, h / 2f,
+                     w / 2f, h / 2f,
+                     0f, h / 2f + 10f * scale
+            );
+        }
+
+        renderer.identity();
+        renderer.end();
+    }
+
+    private void renderRespawnGhost(ShapeRenderer renderer) {
+        float blinkRate = 4f;
+        boolean visible = ((int) (stateTimer * blinkRate * 2)) % 2 == 0;
+        if (!visible) return;
+
+        renderer.begin(ShapeRenderer.ShapeType.Filled);
+        renderer.setColor(color.r, color.g, color.b, 0.4f);
+        renderer.identity();
+        renderer.translate(spawnPoint.x, spawnPoint.y, 0);
+        renderer.rect(-WIDTH / 2f, -HEIGHT / 2f, WIDTH, HEIGHT);
         renderer.identity();
         renderer.end();
     }
@@ -103,6 +186,12 @@ public class Car {
     public float getRotation() { return rotation; }
     public float getSpeed() { return speed; }
     public Color getColor() { return color; }
+    public PlayerState getState() { return state; }
+    public boolean isDriving() { return state == PlayerState.DRIVING; }
+
+    public void setSpawnPoint(float x, float y) {
+        spawnPoint.set(x, y);
+    }
 
     public void clampToTrack(float trackWidth, float trackHeight) {
         position.x = MathUtils.clamp(position.x, WIDTH / 2f, trackWidth - WIDTH / 2f);
