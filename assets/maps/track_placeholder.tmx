@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.10.0" orientation="orthogonal" renderorder="right-down" width="60" height="40" tilewidth="32" tileheight="32" infinite="0">
  <tileset firstgid="1" name="placeholder" tilewidth="32" tileheight="32" tilecount="4" columns="1">
   <image source="placeholder_tiles.png" width="32" height="128"/>

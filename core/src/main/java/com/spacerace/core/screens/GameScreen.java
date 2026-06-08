@@ -13,6 +13,7 @@ import com.badlogic.gdx.math.Vector2;
 import com.spacerace.core.SpaceRaceGame;
 import com.spacerace.core.entities.Car;
 import com.spacerace.core.track.TrackMap;
+import com.spacerace.core.ui.PauseOverlay;
 
 public class GameScreen implements Screen {
 
@@ -30,6 +31,9 @@ public class GameScreen implements Screen {
     private Car player1;
     private Car player2;
 
+    private boolean paused;
+    private PauseOverlay pauseOverlay;
+
     public GameScreen(SpaceRaceGame game, String mapPath) {
         this.game = game;
         this.batch = game.getBatch();
@@ -42,13 +46,15 @@ public class GameScreen implements Screen {
 
     @Override
     public void show() {
-        cameraP1 = new OrthographicCamera();
-        cameraP2 = new OrthographicCamera();
+        cameraP1 = new OrthographicCamera(SpaceRaceGame.WORLD_WIDTH, SpaceRaceGame.WORLD_HEIGHT);
+        cameraP2 = new OrthographicCamera(SpaceRaceGame.WORLD_WIDTH, SpaceRaceGame.WORLD_HEIGHT);
         shapeRenderer = new ShapeRenderer();
 
         labelFont = new BitmapFont();
         labelFont.setColor(Color.WHITE);
         labelFont.getData().setScale(1.2f);
+
+        pauseOverlay = new PauseOverlay();
 
         trackMap = new TrackMap(mapPath);
 
@@ -60,16 +66,25 @@ public class GameScreen implements Screen {
 
     @Override
     public void render(float delta) {
-        handleInput();
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            paused = !paused;
+        }
 
-        player1.update(delta);
-        player2.update(delta);
+        if (paused && Gdx.input.isKeyJustPressed(Input.Keys.Q)) {
+            game.setScreen(new MainMenuScreen(game));
+            dispose();
+            return;
+        }
 
-        checkTrackBounds(player1);
-        checkTrackBounds(player2);
-
-        player1.clampToTrack(trackMap.getWidthPx(), trackMap.getHeightPx());
-        player2.clampToTrack(trackMap.getWidthPx(), trackMap.getHeightPx());
+        if (!paused) {
+            handleInput();
+            player1.update(delta);
+            player2.update(delta);
+            checkTrackBounds(player1);
+            checkTrackBounds(player2);
+            player1.clampToTrack(trackMap.getWidthPx(), trackMap.getHeightPx());
+            player2.clampToTrack(trackMap.getWidthPx(), trackMap.getHeightPx());
+        }
 
         updateCamera(cameraP1, player1);
         updateCamera(cameraP2, player2);
@@ -87,9 +102,8 @@ public class GameScreen implements Screen {
         Gdx.gl.glViewport(0, 0, screenWidth, screenHeight);
         drawDivider(screenWidth, screenHeight, halfWidth);
 
-        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
-            game.setScreen(new MainMenuScreen(game));
-            dispose();
+        if (paused) {
+            pauseOverlay.render(batch);
         }
     }
 
@@ -189,5 +203,6 @@ public class GameScreen implements Screen {
         if (shapeRenderer != null) shapeRenderer.dispose();
         if (labelFont != null) labelFont.dispose();
         if (trackMap != null) trackMap.dispose();
+        if (pauseOverlay != null) pauseOverlay.dispose();
     }
 }
