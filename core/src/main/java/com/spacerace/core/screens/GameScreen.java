@@ -9,7 +9,9 @@ import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
+import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.utils.Array;
 import com.spacerace.core.SpaceRaceGame;
 import com.spacerace.core.entities.Car;
 import com.spacerace.core.track.RaceManager;
@@ -38,6 +40,9 @@ public class GameScreen implements Screen {
 
     private boolean paused;
     private PauseOverlay pauseOverlay;
+
+    // DEBUG: lista checkpointów do rysowania na ekranie
+    private Array<Rectangle> debugCheckpoints;
 
     public GameScreen(SpaceRaceGame game, String mapPath, int totalLaps) {
         this.game = game;
@@ -71,7 +76,8 @@ public class GameScreen implements Screen {
         player1 = new Car(spawnP1.x, spawnP1.y, rotP1, Color.CYAN);
         player2 = new Car(spawnP2.x, spawnP2.y, rotP2, Color.ORANGE);
 
-        raceManager = new RaceManager(trackMap.getCheckpoints(), totalLaps);
+        debugCheckpoints = trackMap.getCheckpoints();
+        raceManager = new RaceManager(debugCheckpoints, totalLaps);
     }
 
     @Override
@@ -143,9 +149,38 @@ public class GameScreen implements Screen {
         player1.render(shapeRenderer);
         player2.render(shapeRenderer);
 
+        renderStartFinishLine(camera);
+
         hud.render(batch, width, height, label, color, owner, totalLaps);
 
         Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+    }
+
+    // Rysuje szachownicę (linię startu/mety)
+    private void renderStartFinishLine(OrthographicCamera camera) {
+        shapeRenderer.setProjectionMatrix(camera.combined);
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+
+        // Pozycja zgrana z checkpoint_3 na x=960. Samochody są na y ~ 272 (LibGDX)
+        // Rysujemy szachownicę od y=160 do y=384
+        int startX = 960;
+        int startY = 160;
+        int height = 256;
+        int size = 16; // rozmiar pojedynczej kratki
+
+        for (int y = startY; y < startY + height; y += size) {
+            for (int x = startX; x < startX + 32; x += size) {
+                // Szachownica: na przemian czarny i biały
+                boolean isWhite = ((x - startX) / size + (y - startY) / size) % 2 == 0;
+                if (isWhite) {
+                    shapeRenderer.setColor(Color.WHITE);
+                } else {
+                    shapeRenderer.setColor(Color.BLACK);
+                }
+                shapeRenderer.rect(x, y, size, size);
+            }
+        }
+        shapeRenderer.end();
     }
 
     private void handleInput() {
