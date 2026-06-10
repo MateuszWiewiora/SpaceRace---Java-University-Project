@@ -3,6 +3,8 @@ package com.spacerace.core.entities;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Polygon;
+import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Vector2;
 import com.spacerace.core.audio.AudioManager;
 
@@ -50,6 +52,10 @@ public class Car {
 
     private int currentCheckpoint;
     private int lapsCompleted;
+
+    // Smooth collision bounce velocity (decays over time)
+    private final Vector2 collisionVelocity = new Vector2();
+    private float collisionSpin = 0f;
 
     public Car(float x, float y, float rotation, Color color) {
         this.position = new Vector2(x, y);
@@ -101,6 +107,24 @@ public class Car {
         float radians = MathUtils.degreesToRadians * rotation;
         velocity.set(MathUtils.cos(radians) * speed, MathUtils.sin(radians) * speed);
         position.add(velocity.x * delta, velocity.y * delta);
+
+        // Apply smooth collision bounce
+        if (collisionVelocity.len2() > 1f) {
+            position.add(collisionVelocity.x * delta, collisionVelocity.y * delta);
+            // Damping: ~85% reduction over ~0.3 seconds
+            float damping = 1f - 6f * delta;
+            if (damping < 0f) damping = 0f;
+            collisionVelocity.scl(damping);
+        } else {
+            collisionVelocity.setZero();
+        }
+
+        // Apply collision spin
+        if (Math.abs(collisionSpin) > 0.5f) {
+            rotation += collisionSpin * delta;
+            collisionSpin *= (1f - 4f * delta);
+            if (Math.abs(collisionSpin) < 0.5f) collisionSpin = 0f;
+        }
     }
 
     private void updateFalling(float delta) {
@@ -212,5 +236,80 @@ public class Car {
     public void clampToTrack(float trackWidth, float trackHeight) {
         position.x = MathUtils.clamp(position.x, WIDTH / 2f, trackWidth - WIDTH / 2f);
         position.y = MathUtils.clamp(position.y, HEIGHT / 2f, trackHeight - HEIGHT / 2f);
+    }
+
+    // ── Collision support ────────────────────────────────────────────────
+
+    public Vector2 getPosition() { return position; }
+
+    public Vector2 getVelocityVector() { return velocity; }
+
+    public void setSpeed(float speed) { this.speed = speed; }
+
+    /**
+     * Returns a LibGDX Polygon representing the car's oriented bounding box.
+     * Used for SAT collision detection.
+     */
+    public Polygon getBoundingPolygon() {
+        float w = WIDTH;
+        float h = HEIGHT;
+        // Vertices relative to center (0,0), before rotation
+        Polygon poly = new Polygon(new float[]{
+            -w / 2f, -h / 2f,
+             w / 2f, -h / 2f,
+             w / 2f,  h / 2f,
+            -w / 2f,  h / 2f
+        });
+        poly.setPosition(position.x, position.y);
+        poly.setRotation(rotation - 90f); // car is drawn with -90 offset
+        return poly;
+    }
+
+    /**
+     * Applies a collision impulse as a smooth velocity bounce
+     * plus a small rotation kick.
+     */
+    public void applyCollisionImpulse(Vector2 pushDirection, float pushStrength, float spinKick) {
+        // Small immediate separation to prevent overlap sticking
+        position.add(pushDirection.x * 3f, pushDirection.y * 3f);
+        // Main bounce as velocity (plays out smoothly over many frames)
+        collisionVelocity.add(pushDirection.x * pushStrength, pushDirection.y * pushStrength);
+        // Rotation kick for visual realism
+        collisionSpin += spinKick;
+        speed *= 0.6f; // lose some speed
+    }
+
+    /**
+     * Checks for and resolves collision between two cars using SAT via
+     * LibGDX's Polygon. Applies smooth velocity bounce instead of
+     * instant position teleport.
+     */
+    public static void resolveCollision(Car a, Car b) {
+        if (a.state != PlayerState.DRIVING || b.state != PlayerState.DRIVING) return;
+
+        Polygon polyA = a.getBoundingPolygon();
+        Polygon polyB = b.getBoundingPolygon();
+
+        if (!Intersector.overlapConvexPolygons(polyA, polyB)) return;
+
+        // Compute push direction: from A center to B center
+        Vector2 diff = new Vector2(b.position.x - a.position.x, b.position.y - a.position.y);
+        float dist = diff.len();
+        if (dist < 0.001f) {
+            diff.set(1f, 0f);
+            dist = 1f;
+        }
+        diff.scl(1f / dist); // normalize
+
+        // Bounce velocity based on combined speed (pixels/second)
+        float combinedSpeed = Math.abs(a.speed) + Math.abs(b.speed);
+        float bounceStrength = 300f + combinedSpeed * 0.8f; // base + speed-dependent
+
+        // Rotation kick (faster impact = more spin)
+        float spinAmount = 60f + combinedSpeed * 0.15f;
+
+        // Apply to both cars in opposite directions
+        a.applyCollisionImpulse(new Vector2(-diff.x, -diff.y), bounceStrength, -spinAmount);
+        b.applyCollisionImpulse(new Vector2(diff.x, diff.y), bounceStrength, spinAmount);
     }
 }

@@ -131,6 +131,7 @@ public class GameScreen implements Screen {
             handleInput();
             player1.update(delta);
             player2.update(delta);
+            Car.resolveCollision(player1, player2);
             checkTrackBounds(player1);
             checkTrackBounds(player2);
             player1.clampToTrack(trackMap.getWidthPx(), trackMap.getHeightPx());
