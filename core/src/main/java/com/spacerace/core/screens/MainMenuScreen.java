@@ -6,6 +6,7 @@ import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.Texture.TextureFilter;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -17,6 +18,7 @@ import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.spacerace.core.SpaceRaceGame;
 import com.spacerace.core.audio.AudioManager;
+import com.spacerace.core.ui.UiFonts;
 
 /** Main menu – fixed UI layout; background fills the window. */
 public class MainMenuScreen implements Screen {
@@ -27,9 +29,8 @@ public class MainMenuScreen implements Screen {
     private static final String FONT_PATH = "ui/upheavtt.ttf";
 
     private static final float LOGO_W = 680f;
-    private static final float LOGO_H = 204f;
     private static final float LOGO_X = (SpaceRaceGame.WORLD_WIDTH - LOGO_W) / 2f;
-    private static final float LOGO_Y = 340f;
+    private static final float LOGO_Y = 300f;
 
     private final SpaceRaceGame game;
     private final SpriteBatch batch;
@@ -64,18 +65,22 @@ public class MainMenuScreen implements Screen {
     public void show() {
         bgTexture = new Texture(Gdx.files.internal(BG_PATH));
         logoTexture = new Texture(Gdx.files.internal(LOGO_PATH));
+        logoTexture.setFilter(TextureFilter.Linear, TextureFilter.Linear);
         playButtonTexture = new Texture(Gdx.files.internal(PLAY_BUTTON_PATH));
+        playButtonTexture.setFilter(TextureFilter.Linear, TextureFilter.Linear);
 
         fontGenerator = new FreeTypeFontGenerator(Gdx.files.internal(FONT_PATH));
 
         FreeTypeFontGenerator.FreeTypeFontParameter promptParams = new FreeTypeFontGenerator.FreeTypeFontParameter();
         promptParams.size = 16;
         promptParams.color = new Color(0.82f, 0.84f, 0.9f, 1f);
+        UiFonts.applyCharset(promptParams);
         promptFont = fontGenerator.generateFont(promptParams);
 
         FreeTypeFontGenerator.FreeTypeFontParameter controlsParams = new FreeTypeFontGenerator.FreeTypeFontParameter();
         controlsParams.size = 14;
         controlsParams.color = new Color(0.7f, 0.72f, 0.78f, 1f);
+        UiFonts.applyCharset(controlsParams);
         controlsFont = fontGenerator.generateFont(controlsParams);
 
         AudioManager.getInstance().playMenuMusic();
@@ -100,7 +105,8 @@ public class MainMenuScreen implements Screen {
         batch.setProjectionMatrix(uiCamera.combined);
         batch.begin();
 
-        batch.draw(logoTexture, LOGO_X, LOGO_Y, LOGO_W, LOGO_H);
+        float logoH = LOGO_W * logoTexture.getHeight() / logoTexture.getWidth();
+        batch.draw(logoTexture, LOGO_X, LOGO_Y, LOGO_W, logoH);
 
         boolean hover = isMouseOver(playButton);
         if (hover) {

@@ -199,12 +199,12 @@
  <objectgroup id="4" name="objects">
   <object id="1" name="spawn_p1" x="283.242" y="581.909" width="32" height="32">
    <properties>
-    <property name="rotation" type="float" value="0"/>
+    <property name="rotation" type="float" value="90"/>
    </properties>
   </object>
   <object id="2" name="spawn_p2" x="412.788" y="586.242" width="32" height="32">
    <properties>
-    <property name="rotation" type="float" value="0"/>
+    <property name="rotation" type="float" value="90"/>
    </properties>
   </object>
   <object id="3" name="checkpoint_0" x="672.727" y="-406.667" width="1962.55" height="1141.7"/>
