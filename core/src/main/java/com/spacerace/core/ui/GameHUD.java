@@ -40,7 +40,7 @@ public class GameHUD implements Disposable {
 
         font.setColor(Color.WHITE);
         y -= lineHeight;
-        font.draw(batch, "Lap " + Math.min(car.getLapsCompleted() + 1, totalLaps) + "/" + totalLaps, x, y);
+        font.draw(batch, "Lap " + car.getLapsCompleted() + "/" + totalLaps, x, y);
 
         y -= lineHeight;
         font.draw(batch, "Speed: " + (int) Math.abs(car.getSpeed()), x, y);
