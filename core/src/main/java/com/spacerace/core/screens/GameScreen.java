@@ -178,8 +178,10 @@ public class GameScreen implements Screen {
         if (trackMap.isOnTrack(car.getX(), car.getY())) {
             car.updateSafePosition();
         } else {
-            // Find the nearest center of the road for respawn
-            Vector2 center = trackMap.findNearestTrackCenter(car.getX(), car.getY());
+            // Find the nearest center of the road for respawn, starting from the edge where they fell off
+            // (using lastSafePosition instead of current out-of-bounds position)
+            Vector2 safeEdge = car.getLastSafePosition();
+            Vector2 center = trackMap.findNearestTrackCenter(safeEdge.x, safeEdge.y);
             car.setSafePosition(center.x, center.y, car.getRotation());
             car.startFalling();
         }

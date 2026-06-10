@@ -239,6 +239,10 @@ public class Car {
         lastSafeRotation = rot;
     }
 
+    public Vector2 getLastSafePosition() {
+        return lastSafePosition;
+    }
+
     public void clampToTrack(float trackWidth, float trackHeight) {
         position.x = MathUtils.clamp(position.x, WIDTH / 2f, trackWidth - WIDTH / 2f);
         position.y = MathUtils.clamp(position.y, HEIGHT / 2f, trackHeight - HEIGHT / 2f);

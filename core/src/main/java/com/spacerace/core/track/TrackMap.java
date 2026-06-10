@@ -134,8 +134,7 @@ public class TrackMap implements Disposable {
         int searchRadius = 15;
 
         float bestX = worldX, bestY = worldY;
-        int bestScore = -1;
-        float bestDist = Float.MAX_VALUE;
+        float bestMetric = -Float.MAX_VALUE;
 
         for (int dy = -searchRadius; dy <= searchRadius; dy++) {
             for (int dx = -searchRadius; dx <= searchRadius; dx++) {
@@ -155,11 +154,13 @@ public class TrackMap implements Disposable {
                     }
                 }
 
-                // Prefer highest score, break ties by distance to car
-                float dist = dx * dx + dy * dy;
-                if (score > bestScore || (score == bestScore && dist < bestDist)) {
-                    bestScore = score;
-                    bestDist = dist;
+                // We want a high score (centered on track), but we MUST penalize distance heavily
+                // so we don't teleport down the track to a wider section.
+                float dist = (float) Math.sqrt(dx * dx + dy * dy);
+                float metric = score - dist * 2.5f; // Penalize 2.5 points per tile of distance
+
+                if (metric > bestMetric) {
+                    bestMetric = metric;
                     bestX = (tx + 0.5f) * tileWidth;
                     bestY = (ty + 0.5f) * tileHeight;
                 }
