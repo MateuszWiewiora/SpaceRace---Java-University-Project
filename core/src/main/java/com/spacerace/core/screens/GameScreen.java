@@ -151,12 +151,12 @@ public class GameScreen implements Screen {
             AudioManager.getInstance().playVictoryFanfare();
         }
 
-        updateCamera(cameraP1, player1);
-        updateCamera(cameraP2, player2);
-
         int screenWidth = Gdx.graphics.getWidth();
         int screenHeight = Gdx.graphics.getHeight();
         int halfWidth = screenWidth / 2;
+
+        updateCamera(cameraP1, player1, halfWidth, screenHeight);
+        updateCamera(cameraP2, player2, halfWidth, screenHeight);
 
         Gdx.gl.glClearColor(0.02f, 0.02f, 0.08f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
@@ -276,7 +276,14 @@ public class GameScreen implements Screen {
         car.setTurningRight(driving && Gdx.input.isKeyPressed(right));
     }
 
-    private void updateCamera(OrthographicCamera camera, Car car) {
+    /**
+     * Matches camera aspect ratio to the on-screen viewport so movement speed
+     * looks the same in every direction (no vertical/horizontal stretch).
+     */
+    private void updateCamera(OrthographicCamera camera, Car car, int viewportWidth, int viewportHeight) {
+        float viewHeight = SpaceRaceGame.WORLD_HEIGHT;
+        float viewWidth = viewHeight * viewportWidth / viewportHeight;
+        camera.setToOrtho(false, viewWidth, viewHeight);
         camera.position.set(car.getX(), car.getY(), 0);
         camera.update();
     }

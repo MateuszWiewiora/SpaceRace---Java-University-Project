@@ -5,9 +5,11 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.ScreenUtils;
@@ -16,45 +18,65 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import com.spacerace.core.SpaceRaceGame;
 import com.spacerace.core.audio.AudioManager;
 
-/** Main menu – click or press PLAY to open the setup screen. */
+/** Main menu – fixed UI layout; background fills the window. */
 public class MainMenuScreen implements Screen {
+
+    private static final String BG_PATH = "ui/menu_bg.png";
+    private static final String LOGO_PATH = "ui/logo_space_race.png";
+    private static final String PLAY_BUTTON_PATH = "ui/btn_play_normal.png";
+    private static final String FONT_PATH = "ui/upheavtt.ttf";
+
+    private static final float LOGO_W = 680f;
+    private static final float LOGO_H = 204f;
+    private static final float LOGO_X = (SpaceRaceGame.WORLD_WIDTH - LOGO_W) / 2f;
+    private static final float LOGO_Y = 340f;
 
     private final SpaceRaceGame game;
     private final SpriteBatch batch;
 
-    private final OrthographicCamera camera;
+    private final OrthographicCamera uiCamera;
+    private final OrthographicCamera screenCamera;
     private final Viewport viewport;
     private final Rectangle playButton = new Rectangle(300f, 255f, 200f, 56f);
     private final Vector3 touch = new Vector3();
     private final GlyphLayout layout = new GlyphLayout();
 
-    private BitmapFont titleFont;
+    private Texture bgTexture;
+    private Texture logoTexture;
+    private Texture playButtonTexture;
+    private FreeTypeFontGenerator fontGenerator;
+
     private BitmapFont promptFont;
-    private BitmapFont buttonFont;
+    private BitmapFont controlsFont;
 
     public MainMenuScreen(SpaceRaceGame game) {
         this.game = game;
         this.batch = game.getBatch();
 
-        camera = new OrthographicCamera();
-        viewport = new FitViewport(SpaceRaceGame.WORLD_WIDTH, SpaceRaceGame.WORLD_HEIGHT, camera);
-        camera.position.set(SpaceRaceGame.WORLD_WIDTH / 2f, SpaceRaceGame.WORLD_HEIGHT / 2f, 0);
-        camera.update();
+        uiCamera = new OrthographicCamera();
+        screenCamera = new OrthographicCamera();
+        viewport = new FitViewport(SpaceRaceGame.WORLD_WIDTH, SpaceRaceGame.WORLD_HEIGHT, uiCamera);
+        uiCamera.position.set(SpaceRaceGame.WORLD_WIDTH / 2f, SpaceRaceGame.WORLD_HEIGHT / 2f, 0);
+        uiCamera.update();
     }
 
     @Override
     public void show() {
-        titleFont = new BitmapFont();
-        titleFont.setColor(Color.WHITE);
-        titleFont.getData().setScale(3f);
+        bgTexture = new Texture(Gdx.files.internal(BG_PATH));
+        logoTexture = new Texture(Gdx.files.internal(LOGO_PATH));
+        playButtonTexture = new Texture(Gdx.files.internal(PLAY_BUTTON_PATH));
 
-        promptFont = new BitmapFont();
-        promptFont.setColor(Color.LIGHT_GRAY);
-        promptFont.getData().setScale(1.2f);
+        fontGenerator = new FreeTypeFontGenerator(Gdx.files.internal(FONT_PATH));
 
-        buttonFont = new BitmapFont();
-        buttonFont.setColor(Color.WHITE);
-        buttonFont.getData().setScale(2f);
+        FreeTypeFontGenerator.FreeTypeFontParameter promptParams = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        promptParams.size = 16;
+        promptParams.color = new Color(0.82f, 0.84f, 0.9f, 1f);
+        promptFont = fontGenerator.generateFont(promptParams);
+
+        FreeTypeFontGenerator.FreeTypeFontParameter controlsParams = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        controlsParams.size = 14;
+        controlsParams.color = new Color(0.7f, 0.72f, 0.78f, 1f);
+        controlsFont = fontGenerator.generateFont(controlsParams);
 
         AudioManager.getInstance().playMenuMusic();
     }
@@ -65,32 +87,68 @@ public class MainMenuScreen implements Screen {
             return;
         }
 
+        int screenW = Gdx.graphics.getWidth();
+        int screenH = Gdx.graphics.getHeight();
+
         ScreenUtils.clear(0.05f, 0.05f, 0.15f, 1f);
 
-        camera.update();
-        batch.setProjectionMatrix(camera.combined);
+        Gdx.gl.glViewport(0, 0, screenW, screenH);
+        drawBackgroundCover(screenW, screenH);
+
+        viewport.update(screenW, screenH, true);
+        viewport.apply();
+        batch.setProjectionMatrix(uiCamera.combined);
         batch.begin();
 
-        titleFont.draw(batch, "SPACE RACE",
-                SpaceRaceGame.WORLD_WIDTH / 2f - 150f,
-                SpaceRaceGame.WORLD_HEIGHT * 0.72f);
+        batch.draw(logoTexture, LOGO_X, LOGO_Y, LOGO_W, LOGO_H);
 
         boolean hover = isMouseOver(playButton);
-        buttonFont.setColor(hover ? Color.YELLOW : Color.WHITE);
-        layout.setText(buttonFont, "PLAY");
-        buttonFont.draw(batch, "PLAY",
-                playButton.x + playButton.width / 2f - layout.width / 2f,
-                playButton.y + playButton.height / 2f + layout.height / 2f - 4f);
+        if (hover) {
+            batch.setColor(1f, 1f, 0.85f, 1f);
+        }
+        batch.draw(playButtonTexture, playButton.x, playButton.y, playButton.width, playButton.height);
+        batch.setColor(Color.WHITE);
 
-        promptFont.setColor(Color.LIGHT_GRAY);
+        layout.setText(promptFont, "Click or press SPACE / ENTER");
         promptFont.draw(batch, "Click or press SPACE / ENTER",
-                SpaceRaceGame.WORLD_WIDTH / 2f - 145f,
+                SpaceRaceGame.WORLD_WIDTH / 2f - layout.width / 2f,
                 playButton.y - 24f);
 
-        promptFont.draw(batch, "Player 1: W A S D    |    Player 2: Arrow Keys",
-                SpaceRaceGame.WORLD_WIDTH / 2f - 210f,
+        layout.setText(controlsFont, "Player 1: W A S D    |    Player 2: Arrow Keys");
+        controlsFont.draw(batch, "Player 1: W A S D    |    Player 2: Arrow Keys",
+                SpaceRaceGame.WORLD_WIDTH / 2f - layout.width / 2f,
                 SpaceRaceGame.WORLD_HEIGHT * 0.12f);
 
+        batch.end();
+
+        Gdx.gl.glViewport(0, 0, screenW, screenH);
+    }
+
+    /** Scales the background to cover the full window (no side bars). */
+    private void drawBackgroundCover(float screenW, float screenH) {
+        screenCamera.setToOrtho(false, screenW, screenH);
+        screenCamera.position.set(screenW / 2f, screenH / 2f, 0);
+        screenCamera.update();
+
+        float texAspect = (float) bgTexture.getWidth() / bgTexture.getHeight();
+        float screenAspect = screenW / screenH;
+        float drawW;
+        float drawH;
+
+        if (screenAspect > texAspect) {
+            drawW = screenW;
+            drawH = screenW / texAspect;
+        } else {
+            drawH = screenH;
+            drawW = screenH * texAspect;
+        }
+
+        float drawX = (screenW - drawW) / 2f;
+        float drawY = (screenH - drawH) / 2f;
+
+        batch.setProjectionMatrix(screenCamera.combined);
+        batch.begin();
+        batch.draw(bgTexture, drawX, drawY, drawW, drawH);
         batch.end();
     }
 
@@ -124,8 +182,11 @@ public class MainMenuScreen implements Screen {
     @Override
     public void dispose() {
         AudioManager.getInstance().stopMenuMusic();
-        if (titleFont != null) titleFont.dispose();
         if (promptFont != null) promptFont.dispose();
-        if (buttonFont != null) buttonFont.dispose();
+        if (controlsFont != null) controlsFont.dispose();
+        if (fontGenerator != null) fontGenerator.dispose();
+        if (bgTexture != null) bgTexture.dispose();
+        if (logoTexture != null) logoTexture.dispose();
+        if (playButtonTexture != null) playButtonTexture.dispose();
     }
 }
