@@ -233,6 +233,12 @@ public class Car {
         lastSafeRotation = rotation;
     }
 
+    /** Sets the safe respawn position explicitly (used to place car at track center). */
+    public void setSafePosition(float x, float y, float rot) {
+        lastSafePosition.set(x, y);
+        lastSafeRotation = rot;
+    }
+
     public void clampToTrack(float trackWidth, float trackHeight) {
         position.x = MathUtils.clamp(position.x, WIDTH / 2f, trackWidth - WIDTH / 2f);
         position.y = MathUtils.clamp(position.y, HEIGHT / 2f, trackHeight - HEIGHT / 2f);

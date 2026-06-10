@@ -121,6 +121,53 @@ public class TrackMap implements Disposable {
         return checkpoints;
     }
 
+    /**
+     * Finds the nearest point that is well-centered on the track.
+     * Searches in a radius around the given world position and picks the
+     * track tile with the most surrounding track neighbors (= most centered).
+     */
+    public Vector2 findNearestTrackCenter(float worldX, float worldY) {
+        if (trackLayer == null) return new Vector2(worldX, worldY);
+
+        int startTx = (int) (worldX / tileWidth);
+        int startTy = (int) (worldY / tileHeight);
+        int searchRadius = 15;
+
+        float bestX = worldX, bestY = worldY;
+        int bestScore = -1;
+        float bestDist = Float.MAX_VALUE;
+
+        for (int dy = -searchRadius; dy <= searchRadius; dy++) {
+            for (int dx = -searchRadius; dx <= searchRadius; dx++) {
+                int tx = startTx + dx;
+                int ty = startTy + dy;
+                if (tx < 0 || tx >= mapWidthTiles || ty < 0 || ty >= mapHeightTiles) continue;
+                if (trackLayer.getCell(tx, ty) == null) continue;
+
+                // Score: count how many tiles in a 7x7 area around this tile are also track
+                int score = 0;
+                for (int cy = -3; cy <= 3; cy++) {
+                    for (int cx = -3; cx <= 3; cx++) {
+                        int ntx = tx + cx, nty = ty + cy;
+                        if (ntx >= 0 && ntx < mapWidthTiles && nty >= 0 && nty < mapHeightTiles) {
+                            if (trackLayer.getCell(ntx, nty) != null) score++;
+                        }
+                    }
+                }
+
+                // Prefer highest score, break ties by distance to car
+                float dist = dx * dx + dy * dy;
+                if (score > bestScore || (score == bestScore && dist < bestDist)) {
+                    bestScore = score;
+                    bestDist = dist;
+                    bestX = (tx + 0.5f) * tileWidth;
+                    bestY = (ty + 0.5f) * tileHeight;
+                }
+            }
+        }
+        return new Vector2(bestX, bestY);
+    }
+
     public float getWidthPx() { return mapWidthPx; }
     public float getHeightPx() { return mapHeightPx; }
 

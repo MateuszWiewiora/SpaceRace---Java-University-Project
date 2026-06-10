@@ -178,6 +178,9 @@ public class GameScreen implements Screen {
         if (trackMap.isOnTrack(car.getX(), car.getY())) {
             car.updateSafePosition();
         } else {
+            // Find the nearest center of the road for respawn
+            Vector2 center = trackMap.findNearestTrackCenter(car.getX(), car.getY());
+            car.setSafePosition(center.x, center.y, car.getRotation());
             car.startFalling();
         }
     }
