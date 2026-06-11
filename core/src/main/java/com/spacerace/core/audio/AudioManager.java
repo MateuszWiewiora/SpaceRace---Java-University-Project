@@ -27,6 +27,7 @@ public class AudioManager {
     private Sound victoryFanfare;
     private Sound engineLoop;
     private Sound pickupSound;
+    private Sound collisionCrack;
 
     // ── Engine loop instance IDs (one per car) ──────────────────────────
     private long engineLoopId1 = -1;
@@ -117,6 +118,15 @@ public class AudioManager {
             System.err.println("[AudioManager] Could not load pickup_sound.wav: " + e.getMessage());
             pickupSound = null;
         }
+
+        try {
+            if (Gdx.files.internal("audio/collision_crack.wav").exists()) {
+                collisionCrack = Gdx.audio.newSound(Gdx.files.internal("audio/collision_crack.wav"));
+            }
+        } catch (Exception e) {
+            System.err.println("[AudioManager] Could not load collision_crack.wav: " + e.getMessage());
+            collisionCrack = null;
+        }
     }
 
     // ── Menu music ──────────────────────────────────────────────────────
@@ -201,6 +211,17 @@ public class AudioManager {
             }
         } catch (Exception e) {
             System.err.println("[AudioManager] Error playing fall sound: " + e.getMessage());
+        }
+    }
+
+    /** Light crack/thud on car impact. Requires {@code audio/collision_crack.wav}. */
+    public void playCollisionSound() {
+        try {
+            if (collisionCrack != null) {
+                collisionCrack.play(SFX_VOLUME * 0.28f);
+            }
+        } catch (Exception e) {
+            System.err.println("[AudioManager] Error playing collision crack: " + e.getMessage());
         }
     }
 

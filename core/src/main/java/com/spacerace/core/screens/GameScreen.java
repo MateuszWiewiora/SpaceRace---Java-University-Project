@@ -16,6 +16,7 @@ import com.spacerace.core.RaceConfig;
 import com.spacerace.core.SpaceRaceGame;
 import com.spacerace.core.audio.AudioManager;
 import com.spacerace.core.entities.Car;
+import com.spacerace.core.entities.CollisionEffectManager;
 import com.spacerace.core.entities.PowerUpManager;
 import com.spacerace.core.track.RaceManager;
 import com.spacerace.core.track.TrackMap;
@@ -40,6 +41,7 @@ public class GameScreen implements Screen {
     private RaceManager raceManager;
     private GameHUD hud;
     private PowerUpManager powerUpManager;
+    private final CollisionEffectManager collisionEffects = new CollisionEffectManager();
 
     private boolean paused;
     private PauseOverlay pauseOverlay;
@@ -76,8 +78,8 @@ public class GameScreen implements Screen {
         float rotP1 = trackMap.getSpawnRotation("spawn_p1");
         float rotP2 = trackMap.getSpawnRotation("spawn_p2");
 
-        player1 = new Car(spawnP1.x, spawnP1.y, rotP1, config.carP1.color);
-        player2 = new Car(spawnP2.x, spawnP2.y, rotP2, config.carP2.color);
+        player1 = new Car(spawnP1.x, spawnP1.y, rotP1, config.carP1);
+        player2 = new Car(spawnP2.x, spawnP2.y, rotP2, config.carP2);
 
         debugCheckpoints = trackMap.getCheckpoints();
         raceManager = new RaceManager(debugCheckpoints, config.totalLaps);
@@ -129,7 +131,8 @@ public class GameScreen implements Screen {
             handleInput();
             player1.update(delta);
             player2.update(delta);
-            Car.resolveCollision(player1, player2);
+            Car.resolveCollision(player1, player2, collisionEffects);
+            collisionEffects.update(delta);
             checkTrackBounds(player1);
             checkTrackBounds(player2);
             player1.clampToTrack(trackMap.getWidthPx(), trackMap.getHeightPx());
@@ -161,11 +164,15 @@ public class GameScreen implements Screen {
         Gdx.gl.glClearColor(0.02f, 0.02f, 0.08f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        renderViewport(cameraP1, 0, halfWidth, screenHeight, "P1", config.carP1.color, player1);
-        renderViewport(cameraP2, halfWidth, halfWidth, screenHeight, "P2", config.carP2.color, player2);
+        renderViewport(cameraP1, 0, halfWidth, screenHeight, player1);
+        renderViewport(cameraP2, halfWidth, halfWidth, screenHeight, player2);
 
         Gdx.gl.glViewport(0, 0, screenWidth, screenHeight);
         drawDivider(screenWidth, screenHeight, halfWidth);
+
+        if (countdownFinished && !raceManager.isRaceFinished()) {
+            hud.renderCenterTimer(batch, screenWidth, screenHeight);
+        }
 
         if (!countdownFinished) renderCountdownOverlay(screenWidth, screenHeight);
         if (paused) pauseOverlay.render(batch);
@@ -186,8 +193,7 @@ public class GameScreen implements Screen {
         }
     }
 
-    private void renderViewport(OrthographicCamera camera, int x, int width, int height,
-                                String label, Color color, Car owner) {
+    private void renderViewport(OrthographicCamera camera, int x, int width, int height, Car owner) {
         Gdx.gl.glViewport(x, 0, width, height);
         Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
         Gdx.gl.glScissor(x, 0, width, height);
@@ -196,12 +202,22 @@ public class GameScreen implements Screen {
 
         shapeRenderer.setProjectionMatrix(camera.combined);
         powerUpManager.render(shapeRenderer);
-        player1.render(shapeRenderer);
-        player2.render(shapeRenderer);
+        player1.renderNitro(shapeRenderer);
+        player2.renderNitro(shapeRenderer);
+
+        batch.setProjectionMatrix(camera.combined);
+        batch.begin();
+        player1.renderSprite(batch);
+        player2.renderSprite(batch);
+        batch.end();
+
+        player1.renderShield(shapeRenderer);
+        player2.renderShield(shapeRenderer);
+        collisionEffects.render(batch, shapeRenderer, camera);
 
         renderStartFinishLine(camera);
 
-        hud.render(batch, width, height, label, color, owner, config.totalLaps);
+        hud.renderPlayer(batch, width, height, owner, config.totalLaps);
 
         Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
     }
@@ -232,11 +248,6 @@ public class GameScreen implements Screen {
     }
 
     private void renderCountdownOverlay(int screenWidth, int screenHeight) {
-        OrthographicCamera uiCamera = new OrthographicCamera(screenWidth, screenHeight);
-        uiCamera.position.set(screenWidth / 2f, screenHeight / 2f, 0);
-        uiCamera.update();
-
-        // Determine what text to show
         String countdownText;
         Color textColor;
         if (countdownTimer > 3f) {
@@ -253,14 +264,7 @@ public class GameScreen implements Screen {
             textColor = Color.WHITE;
         }
 
-        batch.setProjectionMatrix(uiCamera.combined);
-        batch.begin();
-        bigFont.setColor(textColor);
-        // Center the text on screen
-        float textX = screenWidth / 2f - (countdownText.length() * 20f);
-        float textY = screenHeight / 2f + 20f;
-        bigFont.draw(batch, countdownText, textX, textY);
-        batch.end();
+        hud.renderCountdown(batch, screenWidth, screenHeight, countdownText, textColor);
     }
 
     private void handleInput() {
@@ -351,5 +355,6 @@ public class GameScreen implements Screen {
         if (trackMap != null) trackMap.dispose();
         if (pauseOverlay != null) pauseOverlay.dispose();
         if (hud != null) hud.dispose();
+        collisionEffects.dispose();
     }
 }
